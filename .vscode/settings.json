@@ -1,0 +1,16 @@
+{
+  "git.ignoreLimitWarning": true,
+  "sqltools.connections": [
+    {
+      "previewLimit": 50,
+      "server": "localhost",
+      "port": 5433,
+      "driver": "PostgreSQL",
+      "name": "Conexiunea",
+      "group": "conectat",
+      "database": "room_design_db",
+      "username": "postgres",
+      "password": "paul"
+    }
+  ]
+}

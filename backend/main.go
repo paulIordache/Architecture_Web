@@ -14,6 +14,12 @@ import (
 )
 
 func main() {
+	wd, errr := os.Getwd()
+	if errr != nil {
+		log.Fatalf("Error getting working directory: %v", errr)
+	}
+	fmt.Println("Working Directory:", wd)
+
 	// Load environment variables
 	err := godotenv.Load()
 	if err != nil {
@@ -47,5 +53,6 @@ func main() {
 		port = "8080"
 	}
 	fmt.Println("Server running on port", port)
+
 	r.Run(":" + port)
 }

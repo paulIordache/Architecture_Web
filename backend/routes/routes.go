@@ -10,5 +10,6 @@ func SetupRoutes(router *gin.Engine) {
 	{
 		api.GET("/users", handlers.GetUsers)
 		api.GET("/rooms", handlers.GetRooms)
+		api.GET("/assets/:id", handlers.GetAssetByID)
 	}
 }

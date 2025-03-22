@@ -1,29 +1,23 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
-import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
-import { useLoader } from '@react-three/fiber';
-import { TextureLoader } from 'three';
+import { useFrame, useThree, ThreeEvent, useLoader } from '@react-three/fiber';
 import * as THREE from 'three';
-import { ThreeEvent } from '@react-three/fiber';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { TextureLoader } from 'three';
 
-
-// Draggable Model Component
-const Model = ({
-  objUrl,
-  textureUrl,
-  setDragging,
-}: {
+interface DraggableModelProps {
   objUrl: string;
   textureUrl: string;
   setDragging: (dragging: boolean) => void;
-}) => {
+}
+
+const DraggableModel: React.FC<DraggableModelProps> = ({ objUrl, textureUrl, setDragging }) => {
+  // Load OBJ and texture using react-three/fiber's useLoader hook
   const obj = useLoader(OBJLoader, objUrl);
   const texture = useLoader(TextureLoader, textureUrl);
 
-  // Apply the texture
+  // Traverse the loaded object and apply the texture
   obj.traverse((child) => {
     if ((child as THREE.Mesh).isMesh) {
       const mesh = child as THREE.Mesh;
@@ -37,7 +31,7 @@ const Model = ({
     }
   });
 
-  // Dragging state
+  // States for dragging and position tracking
   const [isDragging, setIsDragging] = useState(false);
   const [position, setPosition] = useState([0, 0, 0]);
   const { camera, raycaster, mouse } = useThree();
@@ -46,16 +40,16 @@ const Model = ({
   const handlePointerDown = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation();
     setIsDragging(true);
-    setDragging(true); // Disable OrbitControls
+    setDragging(true); // Disable OrbitControls when dragging
   };
 
   // Handle pointer up (stop dragging)
   const handlePointerUp = () => {
     setIsDragging(false);
-    setDragging(false); // Re-enable OrbitControls
+    setDragging(false); // Re-enable OrbitControls after dragging stops
   };
 
-  // Handle dragging
+  // Update model position while dragging
   useFrame(() => {
     if (isDragging) {
       raycaster.setFromCamera(mouse, camera);
@@ -77,23 +71,4 @@ const Model = ({
   );
 };
 
-// Main Component
-const ThreePage: React.FC = () => {
-  const objUrl = 'http://localhost:8080/assets/Chair.obj';
-  const textureUrl = 'http://localhost:8080/assets/chair.png';
-
-  const [dragging, setDragging] = useState(false);
-
-  return (
-    <div className="h-screen bg-black">
-      <Canvas camera={{ position: [0, 0, 5] }}>
-        <ambientLight />
-        <pointLight position={[10, 10, 10]} />
-        <Model objUrl={objUrl} textureUrl={textureUrl} setDragging={setDragging} />
-        <OrbitControls enabled={!dragging} /> {/* Disable controls while dragging */}
-      </Canvas>
-    </div>
-  );
-};
-
-export default ThreePage;
+export default DraggableModel;

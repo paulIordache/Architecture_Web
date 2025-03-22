@@ -1,4 +1,4 @@
-import ThreePage from './threePage'; // Import your ThreePage component
+import ThreePage from './pages/threePage'; // Import your ThreePage component
 
 const ThreePageRoute = () => {
   return <ThreePage />;  // Rendering the ThreePage component

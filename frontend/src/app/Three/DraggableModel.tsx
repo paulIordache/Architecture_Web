@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useFrame, useThree, ThreeEvent, useLoader } from '@react-three/fiber';
 import * as THREE from 'three';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
@@ -13,11 +13,11 @@ interface DraggableModelProps {
 }
 
 const DraggableModel: React.FC<DraggableModelProps> = ({ objUrl, textureUrl, setDragging }) => {
-  // Load OBJ and texture using react-three/fiber's useLoader hook
+  // Load OBJ and texture
   const obj = useLoader(OBJLoader, objUrl);
   const texture = useLoader(TextureLoader, textureUrl);
 
-  // Traverse the loaded object and apply the texture
+  // Traverse and apply texture
   obj.traverse((child) => {
     if ((child as THREE.Mesh).isMesh) {
       const mesh = child as THREE.Mesh;
@@ -31,42 +31,47 @@ const DraggableModel: React.FC<DraggableModelProps> = ({ objUrl, textureUrl, set
     }
   });
 
-  // States for dragging and position tracking
-  const [isDragging, setIsDragging] = useState(false);
-  const [position, setPosition] = useState([0, 0, 0]);
+  // Dragging state and position tracking
+  const isDragging = useRef(false);
+  const position = useRef(new THREE.Vector3(0, 0, 0));
   const { camera, raycaster, mouse } = useThree();
 
-  // Handle pointer down (start dragging)
+  // Pointer down (start dragging)
   const handlePointerDown = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation();
-    setIsDragging(true);
-    setDragging(true); // Disable OrbitControls when dragging
+    isDragging.current = true;
+    setDragging(true);
   };
 
-  // Handle pointer up (stop dragging)
+  // Pointer up (stop dragging)
   const handlePointerUp = () => {
-    setIsDragging(false);
-    setDragging(false); // Re-enable OrbitControls after dragging stops
+    isDragging.current = false;
+    setDragging(false);
   };
 
-  // Update model position while dragging
-  useFrame(() => {
-    if (isDragging) {
+  // Pointer move (update position)
+  const handlePointerMove = (event: ThreeEvent<PointerEvent>) => {
+    if (isDragging.current) {
       raycaster.setFromCamera(mouse, camera);
-      const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -position.current.y);
       const intersection = new THREE.Vector3();
       if (raycaster.ray.intersectPlane(plane, intersection)) {
-        setPosition([intersection.x, intersection.y, position[2]]);
+        position.current.set(intersection.x, position.current.y, intersection.z);
       }
     }
+  };
+
+  // Sync position with rendering
+  useFrame(() => {
+    obj.position.copy(position.current);
   });
 
   return (
     <primitive
       object={obj}
-      position={position}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
+      onPointerMove={handlePointerMove}
     />
   );
 };

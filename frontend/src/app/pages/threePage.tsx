@@ -5,7 +5,7 @@ import Scene from '../Three/Scene';
 import { useAsset } from '../hooks/useAsset';
 
 const ThreePage: React.FC = () => {
-  const { asset, loading, error } = useAsset("1"); // fetch asset with ID "1"
+  const { asset, loading, error } = useAsset("3"); // fetch asset with ID "1"
 
   if (loading) {
     return (

@@ -1,8 +1,9 @@
 package models
 
-type Room_Layout struct {
+type Room struct {
 	ID        int    `json:"id"`
+	Object    string `json:"obj_file_path"`
+	Texture   string `json:"texture_path"`
+	Thumbnail string `json:"thumbnail_path"`
 	Name      string `json:"name"`
-	Object    string `json:"object"`
-	Thumbnail string `json:"thumbnail"`
 }

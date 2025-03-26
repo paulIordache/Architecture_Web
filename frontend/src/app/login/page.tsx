@@ -29,14 +29,16 @@ const Login = () => {
       console.log("API Response:", data); // Debugging
   
       if (response.ok) {
-        if (data.username) {
+        if (data.username && data.token) {
           localStorage.setItem("username", data.username);
+          localStorage.setItem("authToken", data.token); // Store token
           console.log("Stored username:", data.username);
+          console.log("Stored token:", data.token);
+          router.push("/");
         } else {
-          console.error("Username is missing in response");
+          console.error("Username or token is missing in response");
+          setError("Invalid response from server");
         }
-        
-        router.push("/");
       } else {
         setError(data.error || "Login failed");
       }
@@ -44,6 +46,7 @@ const Login = () => {
       setError("An error occurred. Please try again.");
     }
   };
+  
   
 
   return (

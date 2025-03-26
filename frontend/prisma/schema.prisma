@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model assets {
+  id         Int      @id @default(autoincrement())
+  project_id Int
+  name       String   @db.VarChar(255)
+  projects   projects @relation(fields: [project_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model furniture {
+  id             Int     @id @default(autoincrement())
+  obj_file_path  String
+  texture_path   String
+  thumbnail_path String
+  name           String? @db.VarChar(255)
+}
+
+model projects {
+  id             Int      @id @default(autoincrement())
+  user_id        Int
+  name           String   @db.VarChar(255)
+  description    String?
+  room_layout_id Int?
+  assets         assets[]
+  room           room?    @relation(fields: [room_layout_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model room {
+  id             Int        @id @default(autoincrement())
+  obj_file_path  String
+  texture_path   String
+  thumbnail_path String
+  name           String?    @db.VarChar(255)
+  projects       projects[]
+}
+
+model room_layouts {
+  id             Int       @id @default(autoincrement())
+  obj_file_path  String
+  texture_path   String
+  thumbnail_path String
+  created_at     DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model users {
+  id         Int       @id @default(autoincrement())
+  username   String    @unique @db.VarChar(255)
+  email      String    @unique @db.VarChar(255)
+  password   String
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  updated_at DateTime? @default(now()) @db.Timestamp(6)
+}

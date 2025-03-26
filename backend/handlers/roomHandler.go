@@ -3,15 +3,50 @@ package handlers
 import (
 	"backend/db"
 	"backend/models"
-	"net/http"
-
+	"database/sql"
 	"github.com/gin-gonic/gin"
+	"log"
+	"net/http"
 )
 
-func GetRooms(c *gin.Context) {
-	rows, err := db.DB.Query("SELECT id, name, dimensions FROM rooms")
+func GetRoomByID(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing asset ID"})
+		return
+	}
+
+	var asset models.Room
+	err := db.DB.QueryRow("SELECT id, name, obj_path_file, thumbnail_path, texture_path FROM room WHERE id = $1", id).
+		Scan(&asset.ID, &asset.Name, &asset.Object, &asset.Thumbnail, &asset.Texture)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("Database query error: %v", err)
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Asset not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+		}
+		return
+	}
+
+	// Transform the path from the database
+	asset.Object = transformAssetPath(asset.Object)
+	asset.Thumbnail = transformAssetPath(asset.Thumbnail)
+	asset.Texture = transformAssetPath(asset.Texture)
+
+	// Construct the full URL for the OBJ file
+	fullObjURL := "http://localhost:8080/assets/" + asset.Object
+	log.Printf("Serving OBJ file at: %s", fullObjURL)
+
+	// Return the asset as JSON (you can include the URL or the transformed path)
+	c.JSON(http.StatusOK, asset)
+}
+
+func GetAllRooms(c *gin.Context) {
+	rows, err := db.DB.Query("select id, name, obj_file_path from room")
+	if err != nil {
+		log.Printf("Database query err error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error" + err.Error()})
 		return
 	}
 	defer rows.Close()
@@ -19,11 +54,20 @@ func GetRooms(c *gin.Context) {
 	var rooms []models.Room
 	for rows.Next() {
 		var room models.Room
-		if err := rows.Scan(&room.ID, &room.Name, &room.Dimensions); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
+		err := rows.Scan(&room.ID, &room.Name, &room.Object)
+		if err != nil {
+			log.Printf("Row scan error: %v", err)
+			continue
 		}
+
+		room.Object = transformAssetPath(room.Object)
 		rooms = append(rooms, room)
+	}
+
+	if err = rows.Err(); err != nil {
+		log.Printf("Rows iteration error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error processing data"})
+		return
 	}
 
 	c.JSON(http.StatusOK, rooms)

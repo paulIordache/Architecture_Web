@@ -24,8 +24,8 @@ func GetAssetByID(c *gin.Context) {
 		return
 	}
 
-	var asset models.Asset
-	err := db.DB.QueryRow("SELECT id, name, object, thumbnail, texture FROM assets WHERE id = $1", id).
+	var asset models.A
+	err := db.DB.QueryRow("SELECT id, name, obj_file_path, thumbnail_path, texture_path FROM room WHERE id = $1", id).
 		Scan(&asset.ID, &asset.Name, &asset.Object, &asset.Thumbnail, &asset.Texture)
 	if err != nil {
 		log.Printf("Database query error: %v", err)

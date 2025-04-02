@@ -27,7 +27,7 @@ const Register = () => {
     // Simple client-side validation for password confirmation
 
     // Destructure to remove confirmPassword and terms if you don't need them on the backend.
-    const { confirmPassword, terms, ...payload } = formData;
+    const {...payload } = formData;
     const response = await fetch("http://localhost:8080/api/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

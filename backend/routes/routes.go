@@ -20,8 +20,10 @@ func SetupRoutes(router *gin.Engine) {
 		{
 			protected.GET("/users", handlers.GetUsers)
 			protected.GET("/projects/:username", handlers.GetProjectsByUser)
+			protected.POST("/projects", handlers.CreateProject)
 		}
 		api.GET("/rooms", handlers.GetAllRooms)
+		api.GET("/rooms/:id", handlers.GetRoomByID)
 		api.GET("/assets/:id", handlers.GetAssetByID)
 	}
 }

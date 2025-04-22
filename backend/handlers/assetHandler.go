@@ -4,6 +4,7 @@ import (
 	"backend/db"
 	"backend/models"
 	"database/sql"
+	"errors"
 	"github.com/gin-gonic/gin"
 	"log"
 	"net/http"
@@ -29,7 +30,7 @@ func GetAssetByID(c *gin.Context) {
 		Scan(&asset.ID, &asset.Name, &asset.Object, &asset.Thumbnail, &asset.Texture)
 	if err != nil {
 		log.Printf("Database query error: %v", err)
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Asset not found"})
 		} else {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})

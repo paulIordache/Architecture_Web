@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useRef } from 'react';
 import { useFrame, useThree, ThreeEvent, useLoader } from '@react-three/fiber';
 import * as THREE from 'three';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
@@ -50,7 +50,7 @@ const DraggableModel: React.FC<DraggableModelProps> = ({ objUrl, textureUrl, set
   };
 
   // Pointer move (update position)
-  const handlePointerMove = (event: ThreeEvent<PointerEvent>) => {
+  const handlePointerMove = () => {
     if (isDragging.current) {
       raycaster.setFromCamera(mouse, camera);
       const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -position.current.y);

@@ -1,34 +1,34 @@
-import {useState, useEffect} from 'react';
+import { useEffect, useState } from 'react';
+import axios from 'axios';
 
-export interface AssetData {
+export interface Asset {
+  id: number;
+  name: string;
   object: string;
+  thumbnail: string;
   texture: string;
 }
 
-export function useAsset(assetId: string): {asset: AssetData | null; loading: boolean; error: Error | null} {
-  const [asset, setAsset] = useState<AssetData | null>(null);
+export const useAsset = (id: string) => {
+  const [asset, setAsset] = useState<Asset | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    async function fetchAsset() {
+    const fetchAsset = async () => {
       try {
-        const res = await fetch(`http://localhost:8080/api/assets/${assetId}`);
-        
-        if (!res.ok)
-          throw new Error('Asset not found');
-        
-        const data: AssetData = await res.json();
-        setAsset(data);
-      } catch(err) {
+        const res = await axios.get<Asset>(`http://localhost:8080/api/assets/${id}`);
+        setAsset(res.data);
+      } catch (err) {
+        console.error("Error fetching asset:", err);
         setError(err as Error);
       } finally {
         setLoading(false);
       }
-    }
-    
-    fetchAsset();
-  }, [assetId]);
+    };
 
-  return {asset, loading, error}
-}
+    fetchAsset();
+  }, [id]);
+
+  return { asset, loading, error };
+};

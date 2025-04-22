@@ -17,7 +17,7 @@ func GetRoomByID(c *gin.Context) {
 	}
 
 	var asset models.Room
-	err := db.DB.QueryRow("SELECT id, name, obj_path_file, thumbnail_path, texture_path FROM room WHERE id = $1", id).
+	err := db.DB.QueryRow("SELECT id, name, obj_file_path, texture_path, thumbnail_path FROM room WHERE id = $1", id).
 		Scan(&asset.ID, &asset.Name, &asset.Object, &asset.Thumbnail, &asset.Texture)
 	if err != nil {
 		log.Printf("Database query error: %v", err)
@@ -43,7 +43,7 @@ func GetRoomByID(c *gin.Context) {
 }
 
 func GetAllRooms(c *gin.Context) {
-	rows, err := db.DB.Query("select id, name, obj_file_path from room")
+	rows, err := db.DB.Query("SELECT id, name, obj_file_path, texture_path, thumbnail_path FROM room")
 	if err != nil {
 		log.Printf("Database query err error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error" + err.Error()})
@@ -54,13 +54,15 @@ func GetAllRooms(c *gin.Context) {
 	var rooms []models.Room
 	for rows.Next() {
 		var room models.Room
-		err := rows.Scan(&room.ID, &room.Name, &room.Object)
+		err := rows.Scan(&room.ID, &room.Name, &room.Object, &room.Texture, &room.Thumbnail)
 		if err != nil {
 			log.Printf("Row scan error: %v", err)
 			continue
 		}
 
 		room.Object = transformAssetPath(room.Object)
+		room.Texture = transformAssetPath(room.Texture)
+		room.Thumbnail = transformAssetPath(room.Thumbnail)
 		rooms = append(rooms, room)
 	}
 

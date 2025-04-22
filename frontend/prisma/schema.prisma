@@ -7,29 +7,33 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model users {
+  id         Int        @id @default(autoincrement())
+  username   String     @unique @db.VarChar(255)
+  email      String     @unique @db.VarChar(255)
+  password   String
+  created_at DateTime?  @default(now()) @db.Timestamp(6)
+  updated_at DateTime?  @default(now()) @db.Timestamp(6)
+  projects   projects[]
+}
+
+model projects {
+  id              Int               @id @default(autoincrement())
+  user_id         Int
+  name            String            @db.VarChar(255)
+  description     String?
+  room_layout_id  Int?
+  user            users             @relation(fields: [user_id], references: [id])
+  room            room?             @relation(fields: [room_layout_id], references: [id])
+  assets          assets[]
+  placedFurniture PlacedFurniture[] // link to placed furniture
+}
+
 model assets {
   id         Int      @id @default(autoincrement())
   project_id Int
   name       String   @db.VarChar(255)
   projects   projects @relation(fields: [project_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-}
-
-model furniture {
-  id             Int     @id @default(autoincrement())
-  obj_file_path  String
-  texture_path   String
-  thumbnail_path String
-  name           String? @db.VarChar(255)
-}
-
-model projects {
-  id             Int      @id @default(autoincrement())
-  user_id        Int
-  name           String   @db.VarChar(255)
-  description    String?
-  room_layout_id Int?
-  assets         assets[]
-  room           room?    @relation(fields: [room_layout_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model room {
@@ -49,11 +53,23 @@ model room_layouts {
   created_at     DateTime? @default(now()) @db.Timestamp(6)
 }
 
-model users {
-  id         Int       @id @default(autoincrement())
-  username   String    @unique @db.VarChar(255)
-  email      String    @unique @db.VarChar(255)
-  password   String
-  created_at DateTime? @default(now()) @db.Timestamp(6)
-  updated_at DateTime? @default(now()) @db.Timestamp(6)
+model furniture {
+  id              Int               @id @default(autoincrement())
+  obj_file_path   String
+  texture_path    String
+  thumbnail_path  String
+  name            String?           @db.VarChar(255)
+  // this is a furniture *type*, like a catalog entry
+  placedFurniture PlacedFurniture[]
+}
+
+model PlacedFurniture {
+  id           Int       @id @default(autoincrement())
+  project_id   Int
+  furniture_id Int
+  x            Float
+  y            Float
+  z            Float
+  project      projects  @relation(fields: [project_id], references: [id])
+  furniture    furniture @relation(fields: [furniture_id], references: [id])
 }

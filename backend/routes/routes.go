@@ -20,8 +20,11 @@ func SetupRoutes(router *gin.Engine) {
 		{
 			protected.GET("/users", handlers.GetUsers)
 			protected.GET("/projects/:username", handlers.GetProjectsByUser)
+			protected.GET("/projects_id/:id", handlers.GetProjectByID) // <-- New route for fetching a project by ID
 			protected.POST("/projects", handlers.CreateProject)
+			protected.GET("/users/projects/:projectId/furniture", handlers.GetPlacedFurnitureByProject)
 		}
+
 		api.GET("/rooms", handlers.GetAllRooms)
 		api.GET("/rooms/:id", handlers.GetRoomByID)
 		api.GET("/assets/:id", handlers.GetAssetByID)

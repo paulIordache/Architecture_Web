@@ -1,17 +1,18 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useFrame, useThree, ThreeEvent, useLoader } from '@react-three/fiber';
 import * as THREE from 'three';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { TextureLoader } from 'three';
 import { ModelProps } from './Model';
 
-interface DraggableModelProps  extends ModelProps{
+interface DraggableModelProps extends ModelProps {
   setDragging: (dragging: boolean) => void;
+  initialPosition: [number, number, number]; // Ensure initialPosition is defined here
 }
 
-const DraggableModel: React.FC<DraggableModelProps> = ({ objUrl, textureUrl, setDragging }) => {
+const DraggableModel: React.FC<DraggableModelProps> = ({ objUrl, textureUrl, setDragging, initialPosition }) => {
   // Load OBJ and texture using react-three/fiber's useLoader hook
   const obj = useLoader(OBJLoader, objUrl);
   const texture = useLoader(TextureLoader, textureUrl);
@@ -32,7 +33,7 @@ const DraggableModel: React.FC<DraggableModelProps> = ({ objUrl, textureUrl, set
 
   // States for dragging and position tracking
   const [isDragging, setIsDragging] = useState(false);
-  const [position, setPosition] = useState([0, 0, 0]);
+  const [position, setPosition] = useState<[number, number, number]>(initialPosition); // Set initial position from props
   const { camera, raycaster, mouse } = useThree();
 
   // Handle pointer down (start dragging)
@@ -61,12 +62,12 @@ const DraggableModel: React.FC<DraggableModelProps> = ({ objUrl, textureUrl, set
   });
 
   return (
-    <primitive
-      object={obj}
-      position={position}
-      onPointerDown={handlePointerDown}
-      onPointerUp={handlePointerUp}
-    />
+      <primitive
+          object={obj}
+          position={position}
+          onPointerDown={handlePointerDown}
+          onPointerUp={handlePointerUp}
+      />
   );
 };
 

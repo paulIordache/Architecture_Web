@@ -3,6 +3,7 @@ package handlers
 import (
 	"backend/db"
 	"backend/models"
+	"database/sql"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
@@ -83,4 +84,36 @@ func CreateProject(c *gin.Context) {
 
 	// Respond with the created project including the ID
 	c.JSON(http.StatusCreated, newProject)
+}
+
+// GetProjectByID handles the retrieval of a specific project by its ID
+func GetProjectByID(c *gin.Context) {
+	// Extract the project ID from the URL parameter
+	projectID := c.Param("id")
+	if projectID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Project ID is required"})
+		return
+	}
+
+	// Query to fetch the project by its ID
+	row := db.DB.QueryRow(`
+		SELECT p.id, p.user_id, p.name, p.description, p.room_layout_id
+		FROM projects p
+		WHERE p.id = $1
+	`, projectID)
+
+	var project models.Project
+	err := row.Scan(&project.ID, &project.User, &project.Name, &project.Description, &project.Room)
+	if err != nil {
+		// If no project is found or other errors
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Project not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		return
+	}
+
+	// Return the project details
+	c.JSON(http.StatusOK, project)
 }

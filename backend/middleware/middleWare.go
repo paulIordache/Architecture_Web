@@ -81,6 +81,8 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 		log.Printf("[middleware - %s] Token claims: %v", callerInfo(), claims)
+		authHeader := c.GetHeader("Authorization")
+		log.Println("Authorization Header:", authHeader)
 
 		// Store username and user_id into the context.
 		c.Set("username", claims["username"])

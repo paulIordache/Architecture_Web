@@ -1,12 +1,7 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-'use client'
-/*eslint no-unused-vars: "warn"*/
-
-
-import React, {useState} from 'react';
-import {useFrame, useThree, ThreeEvent, useLoader} from '@react-three/fiber';
+import React, { useState, useEffect } from 'react';
+import { useFrame, useThree, ThreeEvent, useLoader } from '@react-three/fiber';
 import * as THREE from 'three';
-import {OBJLoader} from 'three/addons/loaders/OBJLoader.js';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { TextureLoader } from 'three';
 
 export interface ModelProps {
@@ -14,10 +9,11 @@ export interface ModelProps {
     textureUrl: string;
 }
 
-const Model: React.FC<ModelProps> = ({objUrl, textureUrl}) => {
+const Model: React.FC<ModelProps> = ({ objUrl, textureUrl }) => {
     const obj = useLoader(OBJLoader, objUrl);
     const texture = useLoader(TextureLoader, textureUrl);
 
+    // Traverse and apply texture to the model
     obj.traverse((child) => {
         if ((child as THREE.Mesh).isMesh) {
             const mesh = child as THREE.Mesh;
@@ -31,11 +27,8 @@ const Model: React.FC<ModelProps> = ({objUrl, textureUrl}) => {
         }
     });
 
-    return (
-        <primitive
-            object={obj}
-        />
-    );
+    // Always set the position of the room model to [0, 0, 0]
+    return <primitive object={obj} position={[0, 0, 0]} />;
 };
 
 export default Model;

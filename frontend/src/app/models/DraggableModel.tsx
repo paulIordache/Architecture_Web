@@ -13,11 +13,10 @@ interface DraggableModelProps extends ModelProps {
 }
 
 const DraggableModel: React.FC<DraggableModelProps> = ({ objUrl, textureUrl, setDragging, initialPosition }) => {
-  // Load OBJ and texture using react-three/fiber's useLoader hook
   const obj = useLoader(OBJLoader, objUrl);
   const texture = useLoader(TextureLoader, textureUrl);
 
-  // Traverse the loaded object and apply the texture
+  // Apply texture to the model
   obj.traverse((child) => {
     if ((child as THREE.Mesh).isMesh) {
       const mesh = child as THREE.Mesh;
@@ -33,7 +32,7 @@ const DraggableModel: React.FC<DraggableModelProps> = ({ objUrl, textureUrl, set
 
   // States for dragging and position tracking
   const [isDragging, setIsDragging] = useState(false);
-  const [position, setPosition] = useState<[number, number, number]>(initialPosition); // Set initial position from props
+  const [position, setPosition] = useState<[number, number, number]>(initialPosition);
   const { camera, raycaster, mouse } = useThree();
 
   // Handle pointer down (start dragging)
@@ -49,7 +48,7 @@ const DraggableModel: React.FC<DraggableModelProps> = ({ objUrl, textureUrl, set
     setDragging(false); // Re-enable OrbitControls after dragging stops
   };
 
-  // Update model position while dragging
+  // Update position of draggable objects while dragging
   useFrame(() => {
     if (isDragging) {
       raycaster.setFromCamera(mouse, camera);
@@ -62,6 +61,7 @@ const DraggableModel: React.FC<DraggableModelProps> = ({ objUrl, textureUrl, set
   });
 
   return (
+      // Ensure the draggable object can move while the room stays at [0, 0, 0]
       <primitive
           object={obj}
           position={position}

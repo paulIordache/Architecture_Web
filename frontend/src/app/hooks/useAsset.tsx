@@ -12,16 +12,20 @@ export interface Asset {
 export const useAsset = (id: string) => {
   const [asset, setAsset] = useState<Asset | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchAsset = async () => {
       try {
         const res = await axios.get<Asset>(`http://localhost:8080/api/assets/${id}`);
         setAsset(res.data);
-      } catch (err) {
+      } catch (err: any) {
+        if (err.response && err.response.status === 404) {
+          setError(`Asset with ID ${id} not found.`);
+        } else {
+          setError("Failed to fetch asset.");
+        }
         console.error("Error fetching asset:", err);
-        setError(err as Error);
       } finally {
         setLoading(false);
       }

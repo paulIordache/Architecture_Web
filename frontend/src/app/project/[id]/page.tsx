@@ -3,15 +3,10 @@
 import React, { useEffect, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
+import { useRouter, useParams } from 'next/navigation';
 import Model from '../../models/Model';
 import DraggableModel from '../../models/DraggableModel';
-import { useRouter, useParams } from 'next/navigation';
-import { useAsset } from '../../hooks/useAsset'; // Import your useAsset hook
-
-interface Asset {
-    object: string;
-    texture: string;
-}
+import { useAsset } from '../../hooks/useAsset';
 
 interface Project {
     id: number;
@@ -19,11 +14,12 @@ interface Project {
     room_layout_id: number;
 }
 
-interface RoomLayout {
+interface Furniture {
     id: number;
     name: string;
-    object: string;
-    texture: string;
+    obj_file_path: string;
+    texture_path: string;
+    thumbnail_path: string;
 }
 
 interface PlacedObject {
@@ -31,7 +27,9 @@ interface PlacedObject {
     x: number;
     y: number;
     z: number;
-    asset_id: number;
+    project_id: number;
+    furniture_id: number;
+    furniture: Furniture;
 }
 
 const ProjectPage = () => {
@@ -39,15 +37,19 @@ const ProjectPage = () => {
     const projectId = params.id as string;
 
     const [project, setProject] = useState<Project | null>(null);
-    const [roomLayout, setRoomLayout] = useState<RoomLayout | null>(null);
+    const [roomLayoutId, setRoomLayoutId] = useState<string | null>(null);
     const [placedObjects, setPlacedObjects] = useState<PlacedObject[]>([]);
-    const [assets, setAssets] = useState<Map<number, Asset>>(new Map());
     const [isDragging, setDragging] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
 
-    // Fetch project data and assets
+    const {
+        asset: roomLayout,
+        loading: roomLoading,
+        error: roomError
+    } = useAsset(roomLayoutId || '');
+
     useEffect(() => {
         const token = localStorage.getItem('authToken');
         if (!token) {
@@ -71,30 +73,7 @@ const ProjectPage = () => {
                 setProject(projectData);
 
                 if (projectData.room_layout_id) {
-                    const roomRes = await fetch(`http://localhost:8080/api/rooms/${projectData.room_layout_id}`, {
-                        headers: { Authorization: `Bearer ${token}` },
-                    });
-
-                    if (!roomRes.ok) throw new Error(`Failed to fetch room layout: ${roomRes.statusText}`);
-                    const roomData = await roomRes.json();
-
-                    const objFilePath = roomData.object
-                        ? (roomData.object.startsWith('http')
-                            ? roomData.object
-                            : `http://localhost:8080/api/assets/${roomData.object}`)
-                        : '';
-
-                    const texturePath = roomData.texture
-                        ? (roomData.texture.startsWith('http')
-                            ? roomData.texture
-                            : `http://localhost:8080/assets/${roomData.texture}`)
-                        : '';
-
-                    setRoomLayout({
-                        ...roomData,
-                        object: objFilePath,
-                        texture: texturePath,
-                    });
+                    setRoomLayoutId(projectData.room_layout_id.toString());
                 }
 
                 const objectsRes = await fetch(`http://localhost:8080/api/users/projects/${projectId}/furniture`, {
@@ -103,15 +82,7 @@ const ProjectPage = () => {
 
                 if (!objectsRes.ok) throw new Error(`Failed to fetch objects: ${objectsRes.statusText}`);
                 const objectsData = await objectsRes.json();
-
-                const processedObjects = Array.isArray(objectsData)
-                    ? objectsData.map((obj) => ({
-                        ...obj,
-                        asset_id: obj.asset_id,
-                    }))
-                    : [];
-
-                setPlacedObjects(processedObjects);
+                setPlacedObjects(objectsData);
 
             } catch (error: any) {
                 setError(error.message || 'Failed to load project data');
@@ -123,23 +94,31 @@ const ProjectPage = () => {
         fetchProjectData();
     }, [projectId, router]);
 
-    // Fetch assets only once and store them in state before rendering
-    useEffect(() => {
-        const fetchAssets = async () => {
-            const fetchedAssets = new Map<number, Asset>();
-            for (const object of placedObjects) {
-                const asset = useAsset(object.asset_id); // Fetch asset data using the custom hook
-                if (asset) {
-                    fetchedAssets.set(object.asset_id, asset);
-                }
-            }
-            setAssets(fetchedAssets);
-        };
+    const PlacedFurnitureModel = ({ placedObject }: { placedObject: PlacedObject }) => {
+        const { furniture } = placedObject;
 
-        if (placedObjects.length > 0) {
-            fetchAssets(); // Fetch assets once placedObjects are available
-        }
-    }, [placedObjects]); // Re-run when placedObjects change
+        if (!furniture || !furniture.obj_file_path) return null;
+
+        const objUrl = `http://localhost:8080/${furniture.obj_file_path.replace('objects/', '')}`;
+        const textureUrl = furniture.texture_path
+            ? `http://localhost:8080/${furniture.texture_path.replace('objects/', '')}`
+            : '';
+
+        return (
+            <DraggableModel
+                objUrl={objUrl}
+                textureUrl={textureUrl}
+                setDragging={setDragging}
+                initialPosition={[placedObject.x, placedObject.y, placedObject.z]}
+                scale={[0.009, 0.009, 0.009]}
+                onPositionChange={(newPosition) => {
+                    // Save to state, database, or Redux
+                    console.log("Object moved to:", newPosition);
+                }}
+            />
+
+        );
+    };
 
     if (loading) {
         return (
@@ -186,25 +165,24 @@ const ProjectPage = () => {
 
                 {roomLayout && roomLayout.object && (
                     <Model
-                        objUrl={roomLayout.object}
-                        textureUrl={roomLayout.texture}
+                        objUrl={
+                            roomLayout.object.startsWith('http')
+                                ? roomLayout.object
+                                : `http://localhost:8080/assets/${roomLayout.object.replace('objects/', '')}`
+                        }
+                        textureUrl={
+                            roomLayout.texture
+                                ? (roomLayout.texture.startsWith('http')
+                                    ? roomLayout.texture
+                                    : `http://localhost:8080/assets/${roomLayout.texture.replace('objects/', '')}`)
+                                : ''
+                        }
                     />
                 )}
 
-                {placedObjects.map((object) => {
-                    const asset = assets.get(object.asset_id);
-                    if (!asset) return null;
-
-                    return (
-                        <DraggableModel
-                            key={object.id} // Add unique key prop for each model
-                            objUrl={asset.object}
-                            textureUrl={asset.texture}
-                            setDragging={setDragging}
-                            initialPosition={[object.x, object.y, object.z]}
-                        />
-                    );
-                })}
+                {placedObjects.map((object) => (
+                    <PlacedFurnitureModel key={object.id} placedObject={object} />
+                ))}
             </Canvas>
 
             <div className="absolute bottom-4 right-4 z-10 bg-gray-800 p-4 rounded-lg text-white">

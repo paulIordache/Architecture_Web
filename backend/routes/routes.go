@@ -22,7 +22,12 @@ func SetupRoutes(router *gin.Engine) {
 			protected.GET("/projects/:username", handlers.GetProjectsByUser)
 			protected.GET("/projects_id/:id", handlers.GetProjectByID) // <-- New route for fetching a project by ID
 			protected.POST("/projects", handlers.CreateProject)
+
+			// Furniture routes
 			protected.GET("/users/projects/:projectId/furniture", handlers.GetPlacedFurnitureByProject)
+			protected.POST("/furniture", handlers.AddPlacedFurniture)
+			protected.PUT("/furniture/:id", handlers.UpdateFurniturePosition)
+			protected.DELETE("/furniture/delete/:id", handlers.DeletePlacedFurniture)
 		}
 
 		api.GET("/rooms", handlers.GetAllRooms)

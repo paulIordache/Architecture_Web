@@ -39,11 +39,13 @@ const ProjectPage = () => {
     const [project, setProject] = useState<Project | null>(null);
     const [roomLayoutId, setRoomLayoutId] = useState<string | null>(null);
     const [placedObjects, setPlacedObjects] = useState<PlacedObject[]>([]);
-    const [isDragging, setDragging] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedObject, setSelectedObject] = useState<PlacedObject | null>(null);
     const [deleteError, setDeleteError] = useState<string | null>(null);
+    const [showFurniturePanel, setShowFurniturePanel] = useState(false);
+    const [availableFurniture, setAvailableFurniture] = useState<Furniture[]>([]);
+    const [addFurnitureError, setAddFurnitureError] = useState<string | null>(null);
     const router = useRouter();
 
     const {
@@ -84,6 +86,60 @@ const ProjectPage = () => {
         }
     };
 
+    // Fetch available furniture to add
+    const fetchAvailableFurniture = async () => {
+        try {
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                throw new Error('Authentication token not found');
+            }
+
+            // You need to create this endpoint in your backend
+            // For now, we'll use mock data if the endpoint doesn't exist
+            try {
+                const res = await fetch('http://localhost:8080/api/available-furniture', {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+
+                if (!res.ok) {
+                    throw new Error(`Failed to fetch available furniture: ${res.statusText}`);
+                }
+
+                const furnitureData = await res.json();
+                setAvailableFurniture(furnitureData);
+            } catch (fetchError) {
+                console.warn("Endpoint for available furniture not found, using mock data:", fetchError);
+                // Mock data for demonstration purposes
+                setAvailableFurniture([
+                    {
+                        id: 1,
+                        name: "Chair",
+                        obj_file_path: "objects/chair.obj",
+                        texture_path: "objects/chair_texture.jpg",
+                        thumbnail_path: "objects/chair_thumbnail.jpg"
+                    },
+                    {
+                        id: 2,
+                        name: "Table",
+                        obj_file_path: "objects/table.obj",
+                        texture_path: "objects/table_texture.jpg",
+                        thumbnail_path: "objects/table_thumbnail.jpg"
+                    },
+                    {
+                        id: 3,
+                        name: "Sofa",
+                        obj_file_path: "objects/sofa.obj",
+                        texture_path: "objects/sofa_texture.jpg",
+                        thumbnail_path: "objects/sofa_thumbnail.jpg"
+                    }
+                ]);
+            }
+        } catch (error: any) {
+            console.error("Error in furniture fetching process:", error);
+            setError(error.message || 'Failed to load available furniture');
+        }
+    };
+
     useEffect(() => {
         const token = localStorage.getItem('authToken');
         if (!token) {
@@ -115,6 +171,7 @@ const ProjectPage = () => {
                 }
 
                 await fetchPlacedFurniture();
+                await fetchAvailableFurniture();
 
             } catch (error: any) {
                 console.error("Error fetching project data:", error);
@@ -210,6 +267,57 @@ const ProjectPage = () => {
         }
     };
 
+    const handleAddFurniture = async (furniture: Furniture) => {
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+            setError('Authentication error. Please login again.');
+            return;
+        }
+
+        try {
+            setAddFurnitureError(null);
+
+            // Default position for new furniture
+            const newFurniture = {
+                project_id: parseInt(projectId),
+                furniture_id: furniture.id,
+                x: 0, // Center of the room
+                y: 0, // Ground level
+                z: 0  // Center of the room
+            };
+
+            const response = await fetch('http://localhost:8080/api/furniture', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(newFurniture)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to add furniture');
+            }
+
+            const addedFurniture = await response.json();
+            console.log('Furniture added successfully:', addedFurniture);
+
+            // Add the new furniture to the local state
+            setPlacedObjects(prev => [...prev, addedFurniture]);
+
+            // Close the furniture panel
+            setShowFurniturePanel(false);
+
+            // Select the newly added furniture
+            setSelectedObject(addedFurniture);
+
+        } catch (error: any) {
+            console.error('Error adding furniture:', error);
+            setAddFurnitureError(error.message || 'Failed to add furniture');
+        }
+    };
+
     const selectObject = (object: PlacedObject) => {
         if (selectedObject?.id === object.id) {
             setSelectedObject(null);
@@ -230,17 +338,74 @@ const ProjectPage = () => {
             : '';
 
         return (
-            <DraggableModel
+            <Model
                 key={`furniture-${placedObject.id}`}
                 objUrl={objUrl}
                 textureUrl={textureUrl}
-                setDragging={setDragging}
-                initialPosition={[placedObject.x, placedObject.y, placedObject.z]}
+                position={[placedObject.x, placedObject.y, placedObject.z]}
                 scale={[0.009, 0.009, 0.009]}
-                isSelected={isSelected}
                 onClick={() => selectObject(placedObject)}
-                onPositionChange={(newPosition) => handlePositionChange(placedObject, newPosition)}
+                isSelected={isSelected}
             />
+        );
+    };
+
+    const FurnitureSelectionPanel = () => {
+        if (!showFurniturePanel) return null;
+
+        return (
+            <div className="absolute left-4 top-20 z-10 bg-gray-800 p-4 rounded-lg text-white max-h-[80vh] overflow-y-auto" style={{ width: '280px' }}>
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-bold">Add Furniture</h3>
+                    <button
+                        className="text-gray-400 hover:text-white"
+                        onClick={() => setShowFurniturePanel(false)}
+                    >
+                        ✕
+                    </button>
+                </div>
+
+                {addFurnitureError && (
+                    <div className="bg-red-900 p-2 rounded mb-4 text-sm">
+                        {addFurnitureError}
+                    </div>
+                )}
+
+                {availableFurniture.length === 0 ? (
+                    <p className="text-gray-400">No furniture available.</p>
+                ) : (
+                    <div className="grid grid-cols-1 gap-3">
+                        {availableFurniture.map(furniture => (
+                            <div
+                                key={furniture.id}
+                                className="bg-gray-700 p-3 rounded cursor-pointer hover:bg-gray-600 transition"
+                                onClick={() => handleAddFurniture(furniture)}
+                            >
+                                <div className="w-full h-32 mb-2 bg-gray-800 rounded overflow-hidden flex items-center justify-center">
+                                    {furniture.thumbnail_path ? (
+                                        <img
+                                            src={`http://localhost:8080/${furniture.thumbnail_path.replace('objects/', '')}`}
+                                            alt={furniture.name}
+                                            className="w-full h-full object-contain"
+                                            onError={(e) => {
+                                                // If image fails to load, replace with a placeholder
+                                                (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>';
+                                            }}
+                                        />
+                                    ) : (
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+                                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                            <polyline points="21 15 16 10 5 21"></polyline>
+                                        </svg>
+                                    )}
+                                </div>
+                                <p className="text-sm font-medium">{furniture.name}</p>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
         );
     };
 
@@ -273,19 +438,29 @@ const ProjectPage = () => {
         <div className="h-screen w-full bg-gray-900">
             <div className="absolute top-4 left-4 z-10">
                 <h1 className="text-white text-2xl font-bold">{project?.name || 'Project View'}</h1>
-                <button
-                    className="mt-2 bg-blue-600 text-white px-4 py-2 rounded text-sm"
-                    onClick={() => router.push('/')}
-                >
-                    Back to Dashboard
-                </button>
+                <div className="flex gap-2 mt-2">
+                    <button
+                        className="bg-blue-600 text-white px-4 py-2 rounded text-sm"
+                        onClick={() => router.push('/')}
+                    >
+                        Back to Dashboard
+                    </button>
+                    <button
+                        className="bg-green-600 text-white px-4 py-2 rounded text-sm"
+                        onClick={() => setShowFurniturePanel(!showFurniturePanel)}
+                    >
+                        {showFurniturePanel ? 'Hide Furniture' : 'Add Furniture'}
+                    </button>
+                </div>
             </div>
+
+            <FurnitureSelectionPanel />
 
             <Canvas camera={{ position: [0, 5, 10], fov: 50 }}>
                 <ambientLight intensity={0.7} />
                 <directionalLight position={[10, 10, 5]} intensity={0.8} />
                 <gridHelper args={[20, 20, '#555', '#aaa']} />
-                <OrbitControls enabled={!isDragging} />
+                <OrbitControls />
 
                 {roomLayout && roomLayout.object && (
                     <Model
@@ -310,22 +485,69 @@ const ProjectPage = () => {
             </Canvas>
 
             {/* Object Info Panel */}
-            <div className="absolute bottom-4 right-4 z-10 bg-gray-800 p-4 rounded-lg text-white">
+            <div className="absolute bottom-4 right-4 z-10 bg-gray-800 p-4 rounded-lg text-white" style={{ width: '300px' }}>
                 <p>Objects placed: {placedObjects.length}</p>
                 <p className="text-xs text-gray-400 mt-1">
-                    Click to select | Drag to position | Scroll to zoom
+                    Click to select | Use sliders to position | Scroll to zoom
                 </p>
 
                 {selectedObject && (
                     <div className="mt-4 border-t border-gray-700 pt-2">
                         <p className="font-bold">{selectedObject.furniture.name}</p>
-                        <p className="text-xs mt-1">Position:
-                            X: {selectedObject.x.toFixed(2)},
-                            Y: {selectedObject.y.toFixed(2)},
-                            Z: {selectedObject.z.toFixed(2)}
-                        </p>
+
+                        {/* Position controls with sliders */}
+                        <div className="mt-3">
+                            <label className="block text-xs mb-1">X Position: {selectedObject.x.toFixed(2)}</label>
+                            <input
+                                type="range"
+                                min="-10"
+                                max="10"
+                                step="0.1"
+                                value={selectedObject.x}
+                                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                                onChange={(e) => {
+                                    const newX = parseFloat(e.target.value);
+                                    const updatedObject = {...selectedObject, x: newX};
+                                    setSelectedObject(updatedObject);
+                                    handlePositionChange(selectedObject, [newX, selectedObject.y, selectedObject.z]);
+                                }}
+                            />
+
+                            <label className="block text-xs mb-1 mt-3">Y Position: {selectedObject.y.toFixed(2)}</label>
+                            <input
+                                type="range"
+                                min="0"
+                                max="5"
+                                step="0.1"
+                                value={selectedObject.y}
+                                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                                onChange={(e) => {
+                                    const newY = parseFloat(e.target.value);
+                                    const updatedObject = {...selectedObject, y: newY};
+                                    setSelectedObject(updatedObject);
+                                    handlePositionChange(selectedObject, [selectedObject.x, newY, selectedObject.z]);
+                                }}
+                            />
+
+                            <label className="block text-xs mb-1 mt-3">Z Position: {selectedObject.z.toFixed(2)}</label>
+                            <input
+                                type="range"
+                                min="-10"
+                                max="10"
+                                step="0.1"
+                                value={selectedObject.z}
+                                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                                onChange={(e) => {
+                                    const newZ = parseFloat(e.target.value);
+                                    const updatedObject = {...selectedObject, z: newZ};
+                                    setSelectedObject(updatedObject);
+                                    handlePositionChange(selectedObject, [selectedObject.x, selectedObject.y, newZ]);
+                                }}
+                            />
+                        </div>
+
                         <button
-                            className="mt-2 bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs"
+                            className="mt-4 bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs"
                             onClick={handleDeleteFurniture}
                         >
                             Delete

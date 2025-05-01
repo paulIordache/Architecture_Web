@@ -42,7 +42,7 @@ const useProjects = (username: string, token: string) => {
 
         const data = await response.json();
         setProjects(Array.isArray(data) ? data : []);
-      } catch (err: never) {
+      } catch (err: any) {
         setError(err.message);
         setProjects([]);
       } finally {
@@ -85,7 +85,7 @@ const HeroSection = () => {
     const storedUsername = localStorage.getItem("username");
     const storedToken = localStorage.getItem("authToken");
 
-    if (!storedUsername || !storedToken) {
+    if (!storedUsername && !storedToken) {
       setInitError("User not authenticated");
       setIsLoggedIn(false);
       setUsername("");

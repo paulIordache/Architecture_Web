@@ -39,6 +39,7 @@ const ProjectPage = () => {
     const [project, setProject] = useState<Project | null>(null);
     const [roomLayoutId, setRoomLayoutId] = useState<string | null>(null);
     const [placedObjects, setPlacedObjects] = useState<PlacedObject[]>([]);
+    const [isDragging, setDragging] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedObject, setSelectedObject] = useState<PlacedObject | null>(null);
@@ -97,7 +98,7 @@ const ProjectPage = () => {
             // You need to create this endpoint in your backend
             // For now, we'll use mock data if the endpoint doesn't exist
             try {
-                const res = await fetch('http://localhost:8080/api/available-furniture', {
+                const res = await fetch('http://localhost:8080/api/furniture/all', {
                     headers: { Authorization: `Bearer ${token}` },
                 });
 
@@ -106,6 +107,7 @@ const ProjectPage = () => {
                 }
 
                 const furnitureData = await res.json();
+                console.log("Furnitureeee : " + furnitureData);
                 setAvailableFurniture(furnitureData);
             } catch (fetchError) {
                 console.warn("Endpoint for available furniture not found, using mock data:", fetchError);
@@ -114,16 +116,16 @@ const ProjectPage = () => {
                     {
                         id: 1,
                         name: "Chair",
-                        obj_file_path: "objects/chair.obj",
-                        texture_path: "objects/chair_texture.jpg",
-                        thumbnail_path: "objects/chair_thumbnail.jpg"
+                        obj_file_path: "chair.obj",
+                        texture_path: "chair_texture.jpg",
+                        thumbnail_path: "chair_thumbnail.jpg"
                     },
                     {
                         id: 2,
                         name: "Table",
-                        obj_file_path: "objects/table.obj",
-                        texture_path: "objects/table_texture.jpg",
-                        thumbnail_path: "objects/table_thumbnail.jpg"
+                        obj_file_path: "table.obj",
+                        texture_path: "table_texture.jpg",
+                        thumbnail_path: "table_thumbnail.jpg"
                     },
                     {
                         id: 3,
@@ -338,14 +340,16 @@ const ProjectPage = () => {
             : '';
 
         return (
-            <Model
+            <DraggableModel
                 key={`furniture-${placedObject.id}`}
                 objUrl={objUrl}
                 textureUrl={textureUrl}
-                position={[placedObject.x, placedObject.y, placedObject.z]}
+                setDragging={setDragging}
+                initialPosition={[placedObject.x, placedObject.y, placedObject.z]}
                 scale={[0.009, 0.009, 0.009]}
-                onClick={() => selectObject(placedObject)}
                 isSelected={isSelected}
+                onClick={() => selectObject(placedObject)}
+                onPositionChange={(newPosition) => handlePositionChange(placedObject, newPosition)}
             />
         );
     };
@@ -460,7 +464,7 @@ const ProjectPage = () => {
                 <ambientLight intensity={0.7} />
                 <directionalLight position={[10, 10, 5]} intensity={0.8} />
                 <gridHelper args={[20, 20, '#555', '#aaa']} />
-                <OrbitControls />
+                <OrbitControls enabled={!isDragging} />
 
                 {roomLayout && roomLayout.object && (
                     <Model
@@ -479,75 +483,28 @@ const ProjectPage = () => {
                     />
                 )}
 
-                {placedObjects.map((object) => (
-                    <PlacedFurnitureModel key={`placed-${object.id}`} placedObject={object} />
+                {placedObjects?.map((object) => (
+                    <PlacedFurnitureModel key={object.id} placedObject={object} />
                 ))}
             </Canvas>
 
             {/* Object Info Panel */}
-            <div className="absolute bottom-4 right-4 z-10 bg-gray-800 p-4 rounded-lg text-white" style={{ width: '300px' }}>
-                <p>Objects placed: {placedObjects.length}</p>
+            <div className="absolute bottom-4 right-4 z-10 bg-gray-800 p-4 rounded-lg text-white">
+                <p>Objects placed: {placedObjects?.length ?? 0}</p>
                 <p className="text-xs text-gray-400 mt-1">
-                    Click to select | Use sliders to position | Scroll to zoom
+                    Click to select | Drag to position | Scroll to zoom
                 </p>
 
                 {selectedObject && (
                     <div className="mt-4 border-t border-gray-700 pt-2">
                         <p className="font-bold">{selectedObject.furniture.name}</p>
-
-                        {/* Position controls with sliders */}
-                        <div className="mt-3">
-                            <label className="block text-xs mb-1">X Position: {selectedObject.x.toFixed(2)}</label>
-                            <input
-                                type="range"
-                                min="-10"
-                                max="10"
-                                step="0.1"
-                                value={selectedObject.x}
-                                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                                onChange={(e) => {
-                                    const newX = parseFloat(e.target.value);
-                                    const updatedObject = {...selectedObject, x: newX};
-                                    setSelectedObject(updatedObject);
-                                    handlePositionChange(selectedObject, [newX, selectedObject.y, selectedObject.z]);
-                                }}
-                            />
-
-                            <label className="block text-xs mb-1 mt-3">Y Position: {selectedObject.y.toFixed(2)}</label>
-                            <input
-                                type="range"
-                                min="0"
-                                max="5"
-                                step="0.1"
-                                value={selectedObject.y}
-                                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                                onChange={(e) => {
-                                    const newY = parseFloat(e.target.value);
-                                    const updatedObject = {...selectedObject, y: newY};
-                                    setSelectedObject(updatedObject);
-                                    handlePositionChange(selectedObject, [selectedObject.x, newY, selectedObject.z]);
-                                }}
-                            />
-
-                            <label className="block text-xs mb-1 mt-3">Z Position: {selectedObject.z.toFixed(2)}</label>
-                            <input
-                                type="range"
-                                min="-10"
-                                max="10"
-                                step="0.1"
-                                value={selectedObject.z}
-                                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                                onChange={(e) => {
-                                    const newZ = parseFloat(e.target.value);
-                                    const updatedObject = {...selectedObject, z: newZ};
-                                    setSelectedObject(updatedObject);
-                                    handlePositionChange(selectedObject, [selectedObject.x, selectedObject.y, newZ]);
-                                }}
-                            />
-                        </div>
-
+                        <p className="text-xs mt-1">Position:
+                            X: {selectedObject.x.toFixed(2)},
+                            Y: {selectedObject.y.toFixed(2)},
+                            Z: {selectedObject.z.toFixed(2)}
+                        </p>
                         <button
-                            className="mt-4 bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs"
+                            className="mt-2 bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs"
                             onClick={handleDeleteFurniture}
                         >
                             Delete

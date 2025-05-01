@@ -30,6 +30,7 @@ func SetupRoutes(router *gin.Engine) {
 			protected.DELETE("/furniture/delete/:id", handlers.DeletePlacedFurniture)
 		}
 
+		api.GET("/furniture/all", handlers.GetAllFurniture)
 		api.GET("/rooms", handlers.GetAllRooms)
 		api.GET("/rooms/:id", handlers.GetRoomByID)
 		api.GET("/assets/:id", handlers.GetAssetByID)

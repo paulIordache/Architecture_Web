@@ -6,9 +6,45 @@ import (
 	"database/sql"
 	"encoding/json"
 	"github.com/gin-gonic/gin"
+	"log"
 	"net/http"
 	"strconv"
 )
+
+func GetAllFurniture(c *gin.Context) {
+	rows, err := db.DB.Query("SELECT * FROM furniture")
+	if err != nil {
+		log.Printf("Database query err error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error" + err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	var furnitures []models.Furniture
+	for rows.Next() {
+		var furniture models.Furniture
+		err := rows.Scan(&furniture.ID, &furniture.Name, &furniture.ObjFilePath, &furniture.TexturePath,
+			&furniture.ThumbnailPath)
+
+		if err != nil {
+			log.Printf("Row scan error: %v", err)
+			continue
+		}
+
+		furniture.ObjFilePath = transformAssetPath(furniture.ObjFilePath)
+		furniture.TexturePath = transformAssetPath(furniture.TexturePath)
+		furniture.ThumbnailPath = transformAssetPath(furniture.ThumbnailPath)
+		furnitures = append(furnitures, furniture)
+	}
+
+	if err = rows.Err(); err != nil {
+		log.Printf("Rows iteration error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error processing data"})
+		return
+	}
+
+	c.JSON(http.StatusOK, furnitures)
+}
 
 func GetPlacedFurnitureByProject(c *gin.Context) {
 	projectIDStr := c.Param("projectId")

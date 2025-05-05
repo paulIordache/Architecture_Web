@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useLoader, useThree } from '@react-three/fiber';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { TextureLoader } from 'three/src/loaders/TextureLoader.js';
-import { Mesh, Vector3, MeshStandardMaterial } from 'three';
+import { Mesh, Vector3, MeshStandardMaterial, Raycaster, Plane } from 'three';
 import * as THREE from 'three';
 import { useDrag } from '@use-gesture/react';
 
@@ -28,21 +28,18 @@ const DraggableModel: React.FC<DraggableModelProps> = ({
                                                          onClick
                                                        }) => {
   const obj = useLoader(OBJLoader, objUrl);
-  const texture = textureUrl ? useLoader(TextureLoader, textureUrl) : null;
+  const texture = useLoader(TextureLoader, textureUrl || '/placeholder-texture.jpg');
   const modelRef = useRef<THREE.Group>(null);
-  const { size, viewport, camera, scene } = useThree();
+  const { size, viewport, camera } = useThree();
   const [position, setPosition] = useState<[number, number, number]>(initialPosition);
   const aspect = size.width / viewport.width;
-  const [isDragging, setIsDragging] = useState(false);
 
-  // Apply texture to materials if available
   useEffect(() => {
-    if (obj && texture) {
+    if (obj && textureUrl) {
       obj.traverse((child) => {
         if (child instanceof Mesh) {
           const materials = Array.isArray(child.material) ? child.material : [child.material];
-
-          materials.forEach(material => {
+          materials.forEach((material) => {
             if (material instanceof MeshStandardMaterial) {
               material.map = texture;
               material.needsUpdate = true;
@@ -51,27 +48,23 @@ const DraggableModel: React.FC<DraggableModelProps> = ({
         }
       });
     }
-  }, [obj, texture]);
+  }, [obj, texture, textureUrl]);
 
-  // Update position when initialPosition changes
   useEffect(() => {
     if (modelRef.current) {
       setPosition(initialPosition);
-      modelRef.current.position.set(initialPosition[0], initialPosition[1], initialPosition[2]);
+      modelRef.current.position.set(...initialPosition);
     }
   }, [initialPosition]);
 
-  // Apply highlight effect when selected
   useEffect(() => {
     if (modelRef.current) {
       modelRef.current.traverse((child) => {
         if (child instanceof Mesh) {
           const materials = Array.isArray(child.material) ? child.material : [child.material];
-
-          materials.forEach(material => {
+          materials.forEach((material) => {
             if (material instanceof MeshStandardMaterial) {
               if (isSelected) {
-                // Store original emissive if not already stored
                 if (!child.userData.originalEmissive) {
                   child.userData.originalEmissive = material.emissive.clone();
                 }
@@ -86,50 +79,54 @@ const DraggableModel: React.FC<DraggableModelProps> = ({
     }
   }, [isSelected]);
 
-  // Plane for dragging
-  const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-  const dragPoint = new THREE.Vector3();
+  const dragPlane = new Plane(new Vector3(0, 1, 0), 0);
+  const dragPoint = new Vector3();
 
-  // Use gesture for dragging
   const bind = useDrag(
       ({ active, movement: [x, y], first, last, event }) => {
-        if (first) {
-          setDragging(true);
-          setIsDragging(true);
-        }
-
+        if (first) setDragging(true);
         if (last) {
           setDragging(false);
-          setIsDragging(false);
-
-          // Notify parent about position change when drag ends
-          if (onPositionChange) {
-            onPositionChange(position);
+          if (onPositionChange && modelRef.current) {
+            onPositionChange([
+              modelRef.current.position.x,
+              modelRef.current.position.y,
+              modelRef.current.position.z
+            ]);
           }
         }
 
         if (active && modelRef.current) {
-          // Calculate intersection with the drag plane
-          const raycaster = new THREE.Raycaster();
+          const raycaster = new Raycaster();
+
+          // Fallback safe client coordinates
+          let clientX = 0;
+          let clientY = 0;
+
+          if ('touches' in event && event.touches.length > 0) {
+            clientX = event.touches[0].clientX;
+            clientY = event.touches[0].clientY;
+          } else if ('clientX' in event && 'clientY' in event) {
+            clientX = event.clientX;
+            clientY = event.clientY;
+          }
+
           const mouse = new THREE.Vector2(
-              (event.clientX / size.width) * 2 - 1,
-              -(event.clientY / size.height) * 2 + 1
+              (clientX / size.width) * 2 - 1,
+              -(clientY / size.height) * 2 + 1
           );
 
           raycaster.setFromCamera(mouse, camera);
 
           if (raycaster.ray.intersectPlane(dragPlane, dragPoint)) {
-            // Update position based on the drag point
             const newPosition: [number, number, number] = [
               dragPoint.x,
-              position[1], // Keep Y position the same
+              position[1],
               dragPoint.z
             ];
-
             setPosition(newPosition);
-            modelRef.current.position.set(newPosition[0], newPosition[1], newPosition[2]);
+            modelRef.current.position.set(...newPosition);
           } else {
-            // Fallback to simple movement if plane intersection fails
             const movementX = x / aspect * 0.02;
             const movementZ = y / aspect * 0.02;
 
@@ -140,18 +137,18 @@ const DraggableModel: React.FC<DraggableModelProps> = ({
             ];
 
             setPosition(newPosition);
-            modelRef.current.position.set(newPosition[0], newPosition[1], newPosition[2]);
+            modelRef.current.position.set(...newPosition);
           }
         }
       },
-      { preventDefault: true }
+      {
+        // ✅ Removed preventDefault to avoid errors
+      }
   );
 
   const handleClick = (e: any) => {
     e.stopPropagation();
-    if (onClick) {
-      onClick();
-    }
+    onClick?.();
   };
 
   return (
@@ -166,9 +163,9 @@ const DraggableModel: React.FC<DraggableModelProps> = ({
         <primitive object={obj.clone()} />
 
         {isSelected && (
-            <mesh scale={[1.2, 1.2, 1.2]} visible={true}>
+            <mesh scale={[1.2, 1.2, 1.2]} visible>
               <boxGeometry args={[1, 1, 1]} />
-              <meshBasicMaterial color="yellow" wireframe={true} transparent opacity={0.3} />
+              <meshBasicMaterial color="yellow" wireframe transparent opacity={0.3} />
             </mesh>
         )}
       </group>

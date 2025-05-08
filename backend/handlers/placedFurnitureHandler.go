@@ -14,11 +14,16 @@ import (
 func GetAllFurniture(c *gin.Context) {
 	rows, err := db.DB.Query("SELECT * FROM furniture")
 	if err != nil {
-		log.Printf("Database query err error: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error" + err.Error()})
+		log.Printf("Database query error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
 		return
 	}
-	defer rows.Close()
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+
+		}
+	}(rows)
 
 	var furnitures []models.Furniture
 	for rows.Next() {
@@ -56,7 +61,7 @@ func GetPlacedFurnitureByProject(c *gin.Context) {
 
 	query := `
        SELECT 
-          pf.id, pf.project_id, pf.furniture_id, pf.x, pf.y, pf.z,
+          pf.id, pf.project_id, pf.furniture_id, pf.x, pf.y, pf.z, pf.rotation,
           f.id, f.name, f.obj_file_path, f.texture_path, f.thumbnail_path
        FROM "PlacedFurniture" pf
        JOIN furniture f ON pf.furniture_id = f.id
@@ -65,13 +70,14 @@ func GetPlacedFurnitureByProject(c *gin.Context) {
 
 	rows, err := db.DB.Query(query, projectID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch furniture"})
+		log.Printf("Database query error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch furniture: " + err.Error()})
 		return
 	}
 	defer func(rows *sql.Rows) {
 		err := rows.Close()
 		if err != nil {
-
+			log.Printf("Error closing rows: %v", err)
 		}
 	}(rows)
 
@@ -80,22 +86,29 @@ func GetPlacedFurnitureByProject(c *gin.Context) {
 		var pf models.PlacedFurniture
 		err := rows.Scan(
 			&pf.ID, &pf.ProjectID, &pf.FurnitureID,
-			&pf.X, &pf.Y, &pf.Z,
+			&pf.X, &pf.Y, &pf.Z, &pf.Rotation,
 			&pf.Furniture.ID, &pf.Furniture.Name,
 			&pf.Furniture.ObjFilePath, &pf.Furniture.TexturePath,
 			&pf.Furniture.ThumbnailPath,
 		)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan furniture"})
+			log.Printf("Row scan error: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan furniture: " + err.Error()})
 			return
 		}
 		placedFurnitureList = append(placedFurnitureList, pf)
 	}
 
+	if err = rows.Err(); err != nil {
+		log.Printf("Rows iteration error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error processing furniture data: " + err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, placedFurnitureList)
 }
 
-// UpdateFurniturePosition updates the position of a placed furniture item
+// UpdateFurniturePosition updates the position and rotation of a placed furniture item
 func UpdateFurniturePosition(c *gin.Context) {
 	// Get the furniture ID from the path parameter
 	furnitureIDStr := c.Param("id")
@@ -107,33 +120,35 @@ func UpdateFurniturePosition(c *gin.Context) {
 
 	// Parse the request body
 	var updateData struct {
-		X float64 `json:"x"`
-		Y float64 `json:"y"`
-		Z float64 `json:"z"`
+		X        float64 `json:"x"`
+		Y        float64 `json:"y"`
+		Z        float64 `json:"z"`
+		Rotation float64 `json:"rotation"`
 	}
 
 	if err := c.ShouldBindJSON(&updateData); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request data"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request data: " + err.Error()})
 		return
 	}
 
-	// Update the furniture position in the database
+	// Update the furniture position and rotation in the database
 	updateQuery := `
         UPDATE "PlacedFurniture"
-        SET x = $1, y = $2, z = $3
-        WHERE id = $4
+        SET x = $1, y = $2, z = $3, rotation = $4
+        WHERE id = $5
     `
 
-	_, err = db.DB.Exec(updateQuery, updateData.X, updateData.Y, updateData.Z, furnitureID)
+	_, err = db.DB.Exec(updateQuery, updateData.X, updateData.Y, updateData.Z, updateData.Rotation, furnitureID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update furniture position"})
+		log.Printf("Database update error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update furniture position and rotation: " + err.Error()})
 		return
 	}
 
 	// Fetch the updated furniture to return to the client
 	query := `
         SELECT 
-            pf.id, pf.project_id, pf.furniture_id, pf.x, pf.y, pf.z,
+            pf.id, pf.project_id, pf.furniture_id, pf.x, pf.y, pf.z, pf.rotation,
             f.id, f.name, f.obj_file_path, f.texture_path, f.thumbnail_path
         FROM "PlacedFurniture" pf
         JOIN furniture f ON pf.furniture_id = f.id
@@ -145,14 +160,15 @@ func UpdateFurniturePosition(c *gin.Context) {
 	var updatedFurniture models.PlacedFurniture
 	err = row.Scan(
 		&updatedFurniture.ID, &updatedFurniture.ProjectID, &updatedFurniture.FurnitureID,
-		&updatedFurniture.X, &updatedFurniture.Y, &updatedFurniture.Z,
+		&updatedFurniture.X, &updatedFurniture.Y, &updatedFurniture.Z, &updatedFurniture.Rotation,
 		&updatedFurniture.Furniture.ID, &updatedFurniture.Furniture.Name,
 		&updatedFurniture.Furniture.ObjFilePath, &updatedFurniture.Furniture.TexturePath,
 		&updatedFurniture.Furniture.ThumbnailPath,
 	)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve updated furniture"})
+		log.Printf("Database query error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve updated furniture: " + err.Error()})
 		return
 	}
 
@@ -172,7 +188,7 @@ func DeletePlacedFurniture(c *gin.Context) {
 	// Store furniture details before deletion to return to client
 	query := `
         SELECT 
-            pf.id, pf.project_id, pf.furniture_id, pf.x, pf.y, pf.z,
+            pf.id, pf.project_id, pf.furniture_id, pf.x, pf.y, pf.z, pf.rotation,
             f.id, f.name, f.obj_file_path, f.texture_path, f.thumbnail_path
         FROM "PlacedFurniture" pf
         JOIN furniture f ON pf.furniture_id = f.id
@@ -184,7 +200,7 @@ func DeletePlacedFurniture(c *gin.Context) {
 	var deletedFurniture models.PlacedFurniture
 	err = row.Scan(
 		&deletedFurniture.ID, &deletedFurniture.ProjectID, &deletedFurniture.FurnitureID,
-		&deletedFurniture.X, &deletedFurniture.Y, &deletedFurniture.Z,
+		&deletedFurniture.X, &deletedFurniture.Y, &deletedFurniture.Z, &deletedFurniture.Rotation,
 		&deletedFurniture.Furniture.ID, &deletedFurniture.Furniture.Name,
 		&deletedFurniture.Furniture.ObjFilePath, &deletedFurniture.Furniture.TexturePath,
 		&deletedFurniture.Furniture.ThumbnailPath,
@@ -194,7 +210,8 @@ func DeletePlacedFurniture(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Furniture not found"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving furniture details"})
+			log.Printf("Database query error: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error retrieving furniture details: " + err.Error()})
 		}
 		return
 	}
@@ -203,13 +220,15 @@ func DeletePlacedFurniture(c *gin.Context) {
 	deleteQuery := `DELETE FROM "PlacedFurniture" WHERE id = $1`
 	result, err := db.DB.Exec(deleteQuery, furnitureID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete furniture"})
+		log.Printf("Database delete error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete furniture: " + err.Error()})
 		return
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get deletion result"})
+		log.Printf("Error checking rows affected: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get deletion result: " + err.Error()})
 		return
 	}
 
@@ -229,14 +248,15 @@ func AddPlacedFurniture(c *gin.Context) {
 	var newFurniture models.PlacedFurniture
 
 	if err := json.NewDecoder(c.Request.Body).Decode(&newFurniture); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request data"})
+		log.Printf("JSON decode error: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request data: " + err.Error()})
 		return
 	}
 
 	// Insert new furniture into database
 	insertQuery := `
-        INSERT INTO "PlacedFurniture" (project_id, furniture_id, x, y, z)
-        VALUES ($1, $2, $3, $4, $5) 
+        INSERT INTO "PlacedFurniture" (project_id, furniture_id, x, y, z, rotation)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id
     `
 
@@ -248,17 +268,19 @@ func AddPlacedFurniture(c *gin.Context) {
 		newFurniture.X,
 		newFurniture.Y,
 		newFurniture.Z,
+		newFurniture.Rotation,
 	).Scan(&insertedID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add furniture"})
+		log.Printf("Database insert error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add furniture: " + err.Error()})
 		return
 	}
 
 	// Fetch the complete furniture details to return
 	query := `
         SELECT 
-            pf.id, pf.project_id, pf.furniture_id, pf.x, pf.y, pf.z,
+            pf.id, pf.project_id, pf.furniture_id, pf.x, pf.y, pf.z, pf.rotation,
             f.id, f.name, f.obj_file_path, f.texture_path, f.thumbnail_path
         FROM "PlacedFurniture" pf
         JOIN furniture f ON pf.furniture_id = f.id
@@ -270,14 +292,15 @@ func AddPlacedFurniture(c *gin.Context) {
 	var insertedFurniture models.PlacedFurniture
 	err = row.Scan(
 		&insertedFurniture.ID, &insertedFurniture.ProjectID, &insertedFurniture.FurnitureID,
-		&insertedFurniture.X, &insertedFurniture.Y, &insertedFurniture.Z,
+		&insertedFurniture.X, &insertedFurniture.Y, &insertedFurniture.Z, &insertedFurniture.Rotation,
 		&insertedFurniture.Furniture.ID, &insertedFurniture.Furniture.Name,
 		&insertedFurniture.Furniture.ObjFilePath, &insertedFurniture.Furniture.TexturePath,
 		&insertedFurniture.Furniture.ThumbnailPath,
 	)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve inserted furniture details"})
+		log.Printf("Database query error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve inserted furniture details: " + err.Error()})
 		return
 	}
 

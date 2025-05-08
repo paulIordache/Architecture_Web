@@ -1,169 +1,169 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { useLoader, useThree } from '@react-three/fiber';
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
-import { TextureLoader } from 'three/src/loaders/TextureLoader.js';
-import { Mesh, Vector3, MeshStandardMaterial, Raycaster, Plane } from 'three';
-import * as THREE from 'three';
-import { useDrag } from '@use-gesture/react';
+'use client';
 
-interface DraggableModelProps {
-  objUrl: string;
-  textureUrl?: string;
+import React, { useState, useRef, useEffect } from 'react';
+import { useFrame, useThree, ThreeEvent, useLoader } from '@react-three/fiber';
+import * as THREE from 'three';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { TextureLoader } from 'three';
+import { ModelProps } from './Model';
+
+interface DraggableModelProps extends ModelProps {
+  setDragging: (dragging: boolean) => void;
+  scale?: number | [number, number, number];
   initialPosition?: [number, number, number];
-  scale?: [number, number, number];
-  setDragging: (isDragging: boolean) => void;
-  onPositionChange?: (position: [number, number, number]) => void;
+  initialRotation?: number;
   isSelected?: boolean;
   onClick?: () => void;
+  onPositionChange?: (position: [number, number, number], rotation: number) => void;
 }
 
 const DraggableModel: React.FC<DraggableModelProps> = ({
                                                          objUrl,
                                                          textureUrl,
-                                                         initialPosition = [0, 0, 0],
-                                                         scale = [1, 1, 1],
                                                          setDragging,
-                                                         onPositionChange,
+                                                         scale = 1,
+                                                         initialPosition = [0, 0, 0],
+                                                         initialRotation = 0,
                                                          isSelected = false,
-                                                         onClick
+                                                         onClick,
+                                                         onPositionChange,
                                                        }) => {
   const obj = useLoader(OBJLoader, objUrl);
-  const texture = useLoader(TextureLoader, textureUrl || '/placeholder-texture.jpg');
-  const modelRef = useRef<THREE.Group>(null);
-  const { size, viewport, camera } = useThree();
-  const [position, setPosition] = useState<[number, number, number]>(initialPosition);
-  const aspect = size.width / viewport.width;
+  const texture = useLoader(TextureLoader, textureUrl);
+  const modelRef = useRef<THREE.Group | null>(null);
 
   useEffect(() => {
-    if (obj && textureUrl) {
-      obj.traverse((child) => {
-        if (child instanceof Mesh) {
-          const materials = Array.isArray(child.material) ? child.material : [child.material];
-          materials.forEach((material) => {
-            if (material instanceof MeshStandardMaterial) {
-              material.map = texture;
-              material.needsUpdate = true;
-            }
+    obj.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const mesh = child as THREE.Mesh;
+        if (Array.isArray(mesh.material)) {
+          mesh.material.forEach((material) => {
+            (material as THREE.MeshStandardMaterial).map = texture;
+            (material as THREE.MeshStandardMaterial).needsUpdate = true;
           });
+        } else {
+          (mesh.material as THREE.MeshStandardMaterial).map = texture;
+          (mesh.material as THREE.MeshStandardMaterial).needsUpdate = true;
         }
-      });
-    }
-  }, [obj, texture, textureUrl]);
+      }
+    });
+  }, [obj, texture]);
 
   useEffect(() => {
-    if (modelRef.current) {
-      setPosition(initialPosition);
-      modelRef.current.position.set(...initialPosition);
-    }
-  }, [initialPosition]);
-
-  useEffect(() => {
-    if (modelRef.current) {
-      modelRef.current.traverse((child) => {
-        if (child instanceof Mesh) {
-          const materials = Array.isArray(child.material) ? child.material : [child.material];
+    if (obj) {
+      obj.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+          const mesh = child as THREE.Mesh;
+          const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
           materials.forEach((material) => {
-            if (material instanceof MeshStandardMaterial) {
+            if ((material as THREE.MeshStandardMaterial).emissive) {
               if (isSelected) {
                 if (!child.userData.originalEmissive) {
-                  child.userData.originalEmissive = material.emissive.clone();
+                  child.userData.originalEmissive = (material as THREE.MeshStandardMaterial).emissive.clone();
                 }
-                material.emissive.set(0x333333);
+                (material as THREE.MeshStandardMaterial).emissive.set(0x333333);
               } else if (child.userData.originalEmissive) {
-                material.emissive.copy(child.userData.originalEmissive);
+                (material as THREE.MeshStandardMaterial).emissive.copy(child.userData.originalEmissive);
               }
             }
           });
         }
       });
     }
-  }, [isSelected]);
+  }, [obj, isSelected]);
 
-  const dragPlane = new Plane(new Vector3(0, 1, 0), 0);
-  const dragPoint = new Vector3();
+  const [isDragging, setIsDragging] = useState(false);
+  const [position, setPosition] = useState<[number, number, number]>(initialPosition);
+  const [rotation, setRotation] = useState<number>(initialRotation);
+  const { camera, raycaster, mouse, gl } = useThree();
 
-  const bind = useDrag(
-      ({ active, movement: [x, y], first, last, event }) => {
-        if (first) setDragging(true);
-        if (last) {
-          setDragging(false);
-          if (onPositionChange && modelRef.current) {
-            onPositionChange([
-              modelRef.current.position.x,
-              modelRef.current.position.y,
-              modelRef.current.position.z
-            ]);
-          }
-        }
+  useEffect(() => {
+    setPosition(initialPosition);
+    setRotation(initialRotation);
+  }, [initialPosition, initialRotation]);
 
-        if (active && modelRef.current) {
-          const raycaster = new Raycaster();
+  const pointerIdRef = useRef<number | null>(null);
+  const startPositionRef = useRef<[number, number, number]>([0, 0, 0]);
+  const clickStartTimeRef = useRef<number>(0);
 
-          // Fallback safe client coordinates
-          let clientX = 0;
-          let clientY = 0;
-
-          if ('touches' in event && event.touches.length > 0) {
-            clientX = event.touches[0].clientX;
-            clientY = event.touches[0].clientY;
-          } else if ('clientX' in event && 'clientY' in event) {
-            clientX = event.clientX;
-            clientY = event.clientY;
-          }
-
-          const mouse = new THREE.Vector2(
-              (clientX / size.width) * 2 - 1,
-              -(clientY / size.height) * 2 + 1
-          );
-
-          raycaster.setFromCamera(mouse, camera);
-
-          if (raycaster.ray.intersectPlane(dragPlane, dragPoint)) {
-            const newPosition: [number, number, number] = [
-              dragPoint.x,
-              position[1],
-              dragPoint.z
-            ];
-            setPosition(newPosition);
-            modelRef.current.position.set(...newPosition);
-          } else {
-            const movementX = x / aspect * 0.02;
-            const movementZ = y / aspect * 0.02;
-
-            const newPosition: [number, number, number] = [
-              position[0] + movementX,
-              position[1],
-              position[2] + movementZ
-            ];
-
-            setPosition(newPosition);
-            modelRef.current.position.set(...newPosition);
-          }
-        }
-      },
-      {
-        // ✅ Removed preventDefault to avoid errors
-      }
-  );
-
-  const handleClick = (e: any) => {
-    e.stopPropagation();
-    onClick?.();
+  const handlePointerDown = (event: ThreeEvent<PointerEvent>) => {
+    clickStartTimeRef.current = Date.now();
+    startPositionRef.current = [...position];
+    pointerIdRef.current = event.pointerId;
+    gl.domElement.setPointerCapture(event.pointerId);
+    setIsDragging(true);
+    setDragging(true);
+    event.stopPropagation();
   };
+
+  const handlePointerUp = (event: ThreeEvent<PointerEvent>) => {
+    if (pointerIdRef.current === event.pointerId) {
+      gl.domElement.releasePointerCapture(event.pointerId);
+      pointerIdRef.current = null;
+      setIsDragging(false);
+      setDragging(false);
+
+      const isClick = Date.now() - clickStartTimeRef.current < 200 &&
+          position[0] === startPositionRef.current[0] &&
+          position[1] === startPositionRef.current[1] &&
+          position[2] === startPositionRef.current[2];
+
+      if (isClick && onClick) {
+        onClick();
+      }
+
+      if (!isClick && onPositionChange) {
+        onPositionChange(position, rotation);
+      }
+    }
+    event.stopPropagation();
+  };
+
+  const handlePointerMissed = () => {
+    if (isDragging && pointerIdRef.current !== null) {
+      try {
+        gl.domElement.releasePointerCapture(pointerIdRef.current);
+      } catch (e) {}
+      pointerIdRef.current = null;
+      setIsDragging(false);
+      setDragging(false);
+      if (onPositionChange) {
+        onPositionChange(position, rotation);
+      }
+    }
+  };
+
+  useFrame(() => {
+    if (isDragging) {
+      raycaster.setFromCamera(mouse, camera);
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -position[1]);
+      const intersection = new THREE.Vector3();
+      if (raycaster.ray.intersectPlane(plane, intersection)) {
+        const newPosition: [number, number, number] = [
+          intersection.x,
+          position[1],
+          intersection.z,
+        ];
+        setPosition(newPosition);
+      }
+    }
+  });
+
+  const scaleValue = Array.isArray(scale) ? scale : [scale, scale, scale];
 
   return (
       <group
           ref={modelRef}
-          position={new Vector3(...position)}
-          scale={scale}
-          {...bind()}
-          onClick={handleClick}
-          userData={{ draggable: true }}
+          position={position}
+          rotation={[0, rotation, 0]}
+          scale={scaleValue}
+          onPointerDown={handlePointerDown}
+          onPointerUp={handlePointerUp}
+          onPointerMissed={handlePointerMissed}
       >
         <primitive object={obj.clone()} />
-
         {isSelected && (
-            <mesh scale={[1.2, 1.2, 1.2]} visible>
+            <mesh scale={[1.1, 1.1, 1.1]}>
               <boxGeometry args={[1, 1, 1]} />
               <meshBasicMaterial color="yellow" wireframe transparent opacity={0.3} />
             </mesh>
